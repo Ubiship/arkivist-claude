@@ -1,0 +1,6 @@
+{
+  "name": "arkivist",
+  "version": "0.2.0",
+  "description": "Message your Claude Code from Arkivist chat",
+  "author": { "name": "Arkivist Systems Corp" }
+}
