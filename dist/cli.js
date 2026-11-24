@@ -29,6 +29,9 @@ const USAGE = `Usage:
   arkivist-claude launch [claude args...]
   arkivist-claude launcher        (re)write the ${LAUNCHER_NAME} launcher`;
 export const TMUX_SESSION = 'arkivist-claude';
+/** Marks the Claude Code the launcher starts, so only that session's plugin
+ *  connects (channel.ts channelRelay). Same name as channel.ts LAUNCHED_ENV. */
+const LAUNCHED_MARK = 'ARKIVIST_CHANNEL=1';
 /** The launcher written to ~/.local/bin. Plain sh, so it runs without Node on
  *  the PATH. Foreground by default. \`--background\` starts Claude Code in a
  *  detached tmux session in the current folder, kept awake with caffeinate
@@ -54,7 +57,7 @@ if [ "$1" = "--background" ]; then
   fi
   awake=""
   command -v caffeinate >/dev/null 2>&1 && awake="caffeinate -is "
-  cmd="\${awake}claude ${args}"
+  cmd="${LAUNCHED_MARK} \${awake}claude ${args}"
   [ $# -gt 0 ] && cmd="$cmd $*"
   tmux new-session -d -s ${TMUX_SESSION} -c "$PWD" "$cmd"
   echo "Claude Code is running in the background in $PWD and stays connected after you close this window."
@@ -62,7 +65,7 @@ if [ "$1" = "--background" ]; then
   echo "To leave it running again: press Ctrl-b, then d."
   exit 0
 fi
-exec claude ${args} "$@"
+${LAUNCHED_MARK} exec claude ${args} "$@"
 `;
 }
 function writeLauncher(d) {
@@ -191,8 +194,10 @@ export async function main(argv, d = defaultDeps()) {
     const [cmd, ...rest] = argv;
     if (cmd === 'connect')
         return connect(rest, d);
-    if (cmd === 'launch')
+    if (cmd === 'launch') {
+        process.env.ARKIVIST_CHANNEL = '1'; // inherited by claude, then by the plugin (channel.ts)
         return d.spawn('claude', [...CHANNEL_ARGS, ...rest]).status ?? 1;
+    }
     if (cmd === 'launcher') {
         const file = writeLauncher(d);
         d.out(`Wrote ${file}. Start Claude Code with ${LAUNCHER_NAME}, or ${LAUNCHER_NAME} --background to keep it connected after you close the terminal.`);

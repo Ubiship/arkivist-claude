@@ -34094,7 +34094,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 // src/install.ts
-var INSTALL_SPEC = "github:Ubiship/arkivist-claude";
+var INSTALL_SPEC = "@arkivist/claude";
 var CONNECT_COMMAND = `npx ${INSTALL_SPEC} connect`;
 
 // src/config.ts
@@ -34284,7 +34284,7 @@ var Relay = class _Relay extends EventEmitter {
 };
 
 // src/version.ts
-var VERSION = true ? "0.2.0" : "0.0.0-dev";
+var VERSION = true ? "0.2.1" : "0.0.0-dev";
 
 // src/channel.ts
 var CAP_CHANNEL = "claude/channel";
@@ -34324,7 +34324,7 @@ var PermissionRequestSchema = external_exports.object({
     input_preview: external_exports.string()
   })
 });
-function createChannel(relay) {
+function createChannel(relay, opts = {}) {
   const server = new Server(
     { name: "arkivist", version: VERSION },
     {
@@ -34368,7 +34368,7 @@ function createChannel(relay) {
     return { content: [{ type: "text", text: "sent" }] };
   });
   if (!relay) {
-    server.oninitialized = () => {
+    if (opts.announce ?? true) server.oninitialized = () => {
       void notice(NOT_CONNECTED_NOTICE);
     };
     return { server, relay };
@@ -34426,16 +34426,22 @@ function createChannel(relay) {
   };
   return { server, relay };
 }
+var LAUNCHED_ENV = "ARKIVIST_CHANNEL";
+function channelRelay(env, read, version2) {
+  if (env[LAUNCHED_ENV] !== "1") return null;
+  const cfg = read();
+  return cfg ? new Relay(cfg, crypto.randomUUID(), version2) : null;
+}
 async function runChannel(version2) {
+  const launched = process.env[LAUNCHED_ENV] === "1";
   let relay = null;
   try {
-    const cfg = readConfig();
-    if (cfg) relay = new Relay(cfg, crypto.randomUUID(), version2);
+    relay = channelRelay(process.env, readConfig, version2);
   } catch (e) {
     process.stderr.write(`arkivist: ${e.message}
 `);
   }
-  const { server } = createChannel(relay);
+  const { server } = createChannel(relay, { announce: launched });
   await server.connect(new StdioServerTransport());
   const bye = () => {
     relay?.stop();

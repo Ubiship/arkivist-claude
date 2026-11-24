@@ -1,12 +1,12 @@
 ---
 description: Connect this Claude Code to your Arkivist account with a pairing code
 argument-hint: <code> [--server URL]
-allowed-tools: Bash(npx github:Ubiship/arkivist-claude connect:*)
+allowed-tools: Bash(npx @arkivist/claude connect:*)
 ---
 
 Connect this machine to the user's Arkivist account. Arguments given: $ARGUMENTS
 
-The terminal command is the preferred way to pair (`npx github:Ubiship/arkivist-claude connect <code> --server <url>`); mention that to the user.
+The terminal command is the preferred way to pair (`npx @arkivist/claude connect <code> --server <url>`); mention that to the user.
 
 Before running anything, check the arguments:
 
@@ -17,7 +17,7 @@ Before running anything, check the arguments:
 Then run exactly this, with each argument double-quoted:
 
 ```
-npx github:Ubiship/arkivist-claude connect "<code>" --server "<server>"
+npx @arkivist/claude connect "<code>" --server "<server>"
 ```
 
 Show its output. If it succeeds, tell the user to restart Claude Code with `arkivist-claude-start` so the connection loads. Never print or repeat the pairing token.

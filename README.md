@@ -12,7 +12,7 @@ If your Claude account belongs to a Team or Enterprise organisation, an admin of
 2. On the computer where Claude Code runs (Node.js 20 or newer):
 
    ```
-   npx github:Ubiship/arkivist-claude connect <code> --server https://<your-arkivist-address>
+   npx @arkivist/claude connect <code> --server https://<your-arkivist-address>
    ```
 
    This redeems the code, saves the connection to `~/.config/arkivist/agent.json` (readable only by you), installs the `arkivist` plugin into Claude Code (`claude plugin marketplace add Ubiship/arkivist-claude`, then `claude plugin install arkivist@arkivist`), and writes a launcher at `~/.local/bin/arkivist-claude-start`. If `~/.local/bin` is not on your PATH, the command tells you.
@@ -35,7 +35,9 @@ arkivist-claude-start --background
 
 This starts it in a background `tmux` session in the current folder (on a Mac, `brew install tmux` first) and, on a Mac, keeps the computer from sleeping while it runs. The first time, attach once to confirm the screen below: `tmux attach -t arkivist-claude`, then press Ctrl-b, then d, to leave it running. If your computer sleeps or the network drops, it reconnects by itself.
 
-Paired with an older version? Run `npx github:Ubiship/arkivist-claude launcher` to get the new launcher; no new code is needed.
+Only the Claude Code that `arkivist-claude-start` (or `arkivist-claude launch`) starts connects to Arkivist: the launcher sets `ARKIVIST_CHANNEL=1`, and every other Claude Code session on the computer leaves the connection alone. If you start Claude Code some other way as a channel, set `ARKIVIST_CHANNEL=1` yourself.
+
+Paired with an older version? Run `npx @arkivist/claude@latest launcher` to get the new launcher; no new code is needed.
 
 ### The confirmation screen
 

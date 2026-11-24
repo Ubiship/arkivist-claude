@@ -174,8 +174,9 @@ describe('connect', () => {
 })
 
 describe('launch', () => {
-  it('runs claude with the dev-channel flag and passes args through', async () => {
-    spawnStatus = () => 7
+  it('runs claude with the dev-channel flag and passes args through, marked as launched', async () => {
+    delete process.env.ARKIVIST_CHANNEL
+    spawnStatus = () => { expect(process.env.ARKIVIST_CHANNEL).toBe('1'); return 7 }
     const code = await main(['launch', '--resume', 'x'], deps())
     expect(code).toBe(7)
     expect(calls).toEqual([{ cmd: 'claude', args: ['--dangerously-load-development-channels', 'plugin:arkivist@arkivist', '--resume', 'x'] }])
@@ -216,11 +217,11 @@ describe('launcher script', () => {
     log = join(home, 'calls.log')
   })
 
-  it('runs claude with the dev-channel flag in the foreground, passing args through', () => {
-    stub('claude')
+  it('runs claude with the dev-channel flag in the foreground, passing args through, marked as launched', () => {
+    stub('claude', `echo "ARKIVIST_CHANNEL=$ARKIVIST_CHANNEL" >> "${log}"\n`)
     const r = run(['--resume', 'x'])
     expect(r.status).toBe(0)
-    expect(r.calls).toEqual(['claude --dangerously-load-development-channels plugin:arkivist@arkivist --resume x'])
+    expect(r.calls).toEqual(['claude --dangerously-load-development-channels plugin:arkivist@arkivist --resume x', 'ARKIVIST_CHANNEL=1'])
   })
 
   it('--background starts it in a detached tmux session kept awake, in the current folder', () => {
@@ -229,7 +230,7 @@ describe('launcher script', () => {
     const r = run(['--background'])
     expect(r.status).toBe(0)
     expect(r.calls[0]).toBe('tmux has-session -t arkivist-claude')
-    expect(r.calls[1]).toBe(`tmux new-session -d -s arkivist-claude -c ${realpathSync(home)} caffeinate -is claude --dangerously-load-development-channels plugin:arkivist@arkivist`)
+    expect(r.calls[1]).toBe(`tmux new-session -d -s arkivist-claude -c ${realpathSync(home)} ARKIVIST_CHANNEL=1 caffeinate -is claude --dangerously-load-development-channels plugin:arkivist@arkivist`)
     expect(r.stdout).toMatch(/tmux attach -t arkivist-claude/)
   })
 
@@ -238,7 +239,7 @@ describe('launcher script', () => {
     stub('tmux', 'case "$1" in has-session) exit 1;; esac\n')
     const r = run(['--background'], `${bin}:/bin`) // /usr/bin holds the real caffeinate on a Mac
     expect(r.status).toBe(0)
-    expect(r.calls[1]).toBe(`tmux new-session -d -s arkivist-claude -c ${realpathSync(home)} claude --dangerously-load-development-channels plugin:arkivist@arkivist`)
+    expect(r.calls[1]).toBe(`tmux new-session -d -s arkivist-claude -c ${realpathSync(home)} ARKIVIST_CHANNEL=1 claude --dangerously-load-development-channels plugin:arkivist@arkivist`)
   })
 
   it('--background passes extra words through to claude', () => {

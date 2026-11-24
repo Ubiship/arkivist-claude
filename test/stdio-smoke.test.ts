@@ -47,7 +47,8 @@ describe('built plugin server over stdio', () => {
 
   it('advertises claude/channel on initialize and says hello to the server', async () => {
     child = spawn('node', [bundle], {
-      env: { PATH: process.env.PATH ?? '', HOME: xdg, XDG_CONFIG_HOME: xdg }, // not the repo, so no node_modules to lean on
+      // not the repo, so no node_modules to lean on; started as the launcher starts it
+      env: { PATH: process.env.PATH ?? '', HOME: xdg, XDG_CONFIG_HOME: xdg, ARKIVIST_CHANNEL: '1' },
       cwd: xdg,
     })
     let buf = ''
@@ -70,5 +71,29 @@ describe('built plugin server over stdio', () => {
     expect(hello.plugin_version).toBe(pkgVersion)
     expect(hello.claude_code_version).toBe('2.1.240')
     expect(fake.headers[0].authorization).toBe('Bearer tok')
+  }, 30_000)
+
+  const res = (b: string) => JSON.parse(b.split('\n').find((l) => l.includes('"id":1'))!)
+  // The plugin is a user install, so every Claude Code session starts it.
+  // One not started by the launcher must never take the pairing over.
+  it('a session not started by the launcher answers MCP but never connects', async () => {
+    child?.kill() // the launcher-started one above
+    const before = fake.headers.length // the fake server is shared with the test above
+    child = spawn('node', [bundle], {
+      env: { PATH: process.env.PATH ?? '', HOME: xdg, XDG_CONFIG_HOME: xdg },
+      cwd: xdg,
+    })
+    let buf = ''
+    child.stdout.on('data', (d) => { buf += d.toString() })
+    const send = (m: object) => child!.stdin.write(JSON.stringify(m) + '\n')
+    send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {
+      protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'claude-code', version: '2.1.240' },
+    } })
+    await until(() => buf.includes('"id":1'), 10_000)
+    send({ jsonrpc: '2.0', method: 'notifications/initialized' })
+    await new Promise((r) => setTimeout(r, 1500))
+    expect(fake.headers.length - before, 'it connected to the server').toBe(0)
+    expect(res(buf).result.serverInfo.name).toBe('arkivist')
+    expect(buf, 'it announced itself in an unrelated session').not.toContain('notifications/claude/channel')
   }, 30_000)
 })

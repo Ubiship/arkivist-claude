@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { z } from 'zod'
-import { createChannel, NOT_CONNECTED_NOTICE, REPLACED_NOTICE, REFUSED_NOTICE, type Channel } from '../src/channel.js'
+import { createChannel, channelRelay, NOT_CONNECTED_NOTICE, REPLACED_NOTICE, REFUSED_NOTICE, type Channel } from '../src/channel.js'
 import { Relay } from '../src/relay.js'
 import { VERSION } from '../src/version.js'
 import { fakeServer, until, settle, type Fake } from './helpers.js'
@@ -22,11 +22,11 @@ let channel: Channel | undefined
 const notes: Array<z.infer<typeof ChannelNote>['params']> = []
 const perms: Array<z.infer<typeof PermNote>['params']> = []
 
-async function boot(relay: Relay | null) {
+async function boot(relay: Relay | null, opts?: { announce?: boolean }) {
   client = new Client({ name: 'claude-code', version: '2.1.240' }, { capabilities: {} })
   client.setNotificationHandler(ChannelNote, async (n) => { notes.push(n.params) })
   client.setNotificationHandler(PermNote, async (n) => { perms.push(n.params) })
-  channel = createChannel(relay)
+  channel = createChannel(relay, opts)
   const [a, b] = InMemoryTransport.createLinkedPair()
   await channel.server.connect(b)
   await client.connect(a)
@@ -160,7 +160,7 @@ describe('channel server', () => {
     fake.conns[0].send(JSON.stringify({ type: 'revoked' }))
     await until(() => notes.length === 1)
     expect(notes[0].content).toBe(NOT_CONNECTED_NOTICE)
-    expect(NOT_CONNECTED_NOTICE).toBe('This Claude Code is not connected to Arkivist. Run /arkivist:pair or npx github:Ubiship/arkivist-claude connect.')
+    expect(NOT_CONNECTED_NOTICE).toBe('This Claude Code is not connected to Arkivist. Run /arkivist:pair or npx @arkivist/claude connect.')
     expect(r.stopped).toBe(true)
   })
 
@@ -186,6 +186,35 @@ describe('channel server', () => {
     expect(notes[0].content).toBe(NOT_CONNECTED_NOTICE)
     const res = await client.callTool({ name: 'reply', arguments: { text: 'x' } })
     expect(res.isError).toBe(true)
+  })
+})
+
+// Every Claude Code session on the computer loads the plugin (it is a user
+// install), but only the one started by arkivist-claude-start may hold the
+// connection: the launcher sets ARKIVIST_CHANNEL=1. Any other session must
+// neither connect (it would take the pairing over and silently drop the
+// owner's messages) nor announce anything.
+describe('only a launcher-started session connects', () => {
+  const cfg = { server: 'https://x.example', token: 't', agentName: 'A', pairingId: 'p' }
+
+  it('connects only with ARKIVIST_CHANNEL=1', () => {
+    const read = vi.fn(() => cfg)
+    expect(channelRelay({}, read, '0.2.1')).toBeNull()
+    expect(channelRelay({ ARKIVIST_CHANNEL: '0' }, read, '0.2.1')).toBeNull()
+    expect(read).not.toHaveBeenCalled()
+    const r = channelRelay({ ARKIVIST_CHANNEL: '1' }, read, '0.2.1')
+    expect(r).toBeInstanceOf(Relay)
+    r?.stop()
+  })
+
+  it('launcher-started but not paired: no relay', () => {
+    expect(channelRelay({ ARKIVIST_CHANNEL: '1' }, () => null, '0.2.1')).toBeNull()
+  })
+
+  it('a session not started by the launcher stays silent (no not-connected notice)', async () => {
+    await boot(null, { announce: false })
+    await settle()
+    expect(notes).toEqual([])
   })
 })
 

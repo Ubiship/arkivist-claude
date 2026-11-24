@@ -64,8 +64,11 @@ const PermissionRequestSchema = z.object({
 
 export type Channel = { server: Server; relay: Relay | null }
 
-/** Builds the channel MCP server. `relay` is null when this machine is not paired. */
-export function createChannel(relay: Relay | null): Channel {
+/** Builds the channel MCP server. `relay` is null when this machine is not
+ *  paired, or this session was not started by the launcher. `announce`
+ *  (default true) sends the not-connected notice when there is no relay; a
+ *  session not started by the launcher passes false and stays silent. */
+export function createChannel(relay: Relay | null, opts: { announce?: boolean } = {}): Channel {
   const server = new Server(
     { name: 'arkivist', version: VERSION },
     {
@@ -116,7 +119,7 @@ export function createChannel(relay: Relay | null): Channel {
   })
 
   if (!relay) {
-    server.oninitialized = () => { void notice(NOT_CONNECTED_NOTICE) }
+    if (opts.announce ?? true) server.oninitialized = () => { void notice(NOT_CONNECTED_NOTICE) }
     return { server, relay }
   }
 
@@ -173,16 +176,36 @@ export function createChannel(relay: Relay | null): Channel {
   return { server, relay }
 }
 
+/** Set by arkivist-claude-start (and \`arkivist-claude launch\`) on the Claude
+ *  Code it starts, and inherited by this server. */
+export const LAUNCHED_ENV = 'ARKIVIST_CHANNEL'
+
+/** The relay for this session, or null. The plugin is installed for the
+ *  whole user account, so EVERY Claude Code session starts this server; only
+ *  the one the launcher started (LAUNCHED_ENV=1) may connect. Any other
+ *  session connecting would take the pairing over, and since it was not
+ *  started as a channel Claude Code would silently drop the owner's
+ *  messages. */
+export function channelRelay(
+  env: NodeJS.ProcessEnv,
+  read: () => ReturnType<typeof readConfig>,
+  version: string,
+): Relay | null {
+  if (env[LAUNCHED_ENV] !== '1') return null
+  const cfg = read()
+  return cfg ? new Relay(cfg, crypto.randomUUID(), version) : null
+}
+
 /** Process entry: read config, build the channel, serve it over stdio. */
 export async function runChannel(version: string): Promise<void> {
+  const launched = process.env[LAUNCHED_ENV] === '1'
   let relay: Relay | null = null
   try {
-    const cfg = readConfig()
-    if (cfg) relay = new Relay(cfg, crypto.randomUUID(), version)
+    relay = channelRelay(process.env, readConfig, version)
   } catch (e) {
     process.stderr.write(`arkivist: ${(e as Error).message}\n`)
   }
-  const { server } = createChannel(relay)
+  const { server } = createChannel(relay, { announce: launched })
   await server.connect(new StdioServerTransport())
   const bye = () => { relay?.stop(); process.exit(0) }
   process.stdin.on('close', bye)
